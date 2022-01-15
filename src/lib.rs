@@ -319,6 +319,60 @@ impl BwaAligner {
         (recs1, recs2)
     }
 
+    /// Align a single read to the reference.
+    pub fn align_single_read(
+        &self,
+        name: &[u8],
+        r1: &[u8],
+        q1: &[u8]
+    ) -> Vec<Record> {
+        let name = CString::new(name).unwrap();
+        let raw_name = name.into_raw();
+
+        // Prep input data -- need to make copy of reads since BWA will edit the strings in-place
+        // FIXME - set an id -- used for a random hash
+        let mut r1 = Vec::from(r1);
+        let mut q1 = Vec::from(q1);
+
+        let read1 = bwa_sys::bseq1_t {
+            l_seq: r1.len() as i32,
+            name: raw_name,
+            seq: r1.as_mut_ptr() as *mut i8,
+            qual: q1.as_mut_ptr() as *mut i8,
+            comment: ptr::null_mut(),
+            id: 0,
+            sam: ptr::null_mut(),
+        };
+
+        let mut reads = [read1];
+
+        // Align the read pair. BWA will write the SAM data back to the bwa_sys::bseq1_t.sam field
+        unsafe {
+            let r = *(self.reference.bwt_data);
+            let settings = self.settings.bwa_settings;
+            bwa_sys::mem_process_seq_pe(
+                &settings,
+                r.bwt,
+                r.bns,
+                r.pac,
+                reads.as_mut_ptr(),
+                self.pe_stats.inner.as_ptr(),
+            );
+            let _ = CString::from_raw(raw_name);
+        }
+
+        // Parse the results from the SAM output & convert the htslib Records
+        let sam1 = unsafe { CStr::from_ptr(reads[0].sam) };
+
+        let recs1 = self.parse_sam_to_records(sam1.to_bytes());
+
+        unsafe {
+            libc::free(reads[0].sam as *mut libc::c_void);
+        }
+
+        recs1
+    }
+
     fn parse_sam_to_records(&self, sam: &[u8]) -> Vec<Record> {
         let mut records = Vec::new();
 
@@ -361,6 +415,14 @@ mod tests {
         [name, r1, q1, r2, q2]
     }
 
+    fn read_single() -> [&'static [u8]; 3] {
+        let name: &[u8] = b"@chr_727436_727956_3:0:0_1:0:0_0/1";
+        let r1  : &[u8] = b"GATGGCTGCGCAAGGGTTCTTACTGATCGCCACGTTTTTACTGGTGTTAATGGTGCTGGCGCGTCCTTTAGGCAGCGGGCTGGCGCGGCTGATTAATGACATTCCTCTTCCCGGTACAACGGGCGTTGAGCGCGAACTTTTTCGCGCACT";
+        let q1  : &[u8] = b"222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222";
+
+        [name, r1, q1]
+    }
+
     fn read_split() -> [&'static [u8]; 5] {
         let name = b"@chr_1561275_1561756_1:0:0_2:0:0_5c/1";
         let r1 = b"GCATCGATAAGCAGGTCAAATTCTCCCGTCATTATCACCTCTGCTACTTAAATTTCCCGCTTTATAAGCCGATTACGGCCTGGCATTACCCTATCCATAATTTAGGTGGGATGCCCGGTGCGTGGTTGGCAGATCCGCTGTTCTTTATTT";
@@ -377,6 +439,11 @@ mod tests {
         bwa.align_read_pair(r[0], r[1], r[2], r[3], r[4])
     }
 
+    fn align_single_read(r: [&[u8]; 3]) -> Vec<Record> {
+        let bwa = load_aligner();
+        bwa.align_single_read(r[0], r[1], r[2])
+    }
+
     #[test]
     fn simple_align() {
         let (r1, r2) = align_read(read_simple());
@@ -391,6 +458,13 @@ mod tests {
         assert_eq!(r1[0].pos(), 931375);
         assert_eq!(r1[1].pos(), 932605);
         assert_eq!(r2[0].pos(), 932937);
+    }
+
+    #[test]
+    fn single_align() {
+        let r1 = align_single_read(read_single());
+        assert_eq!(r1.len(), 1);
+        assert_eq!(r1[0].pos(), 727806);
     }
 
     #[test]
