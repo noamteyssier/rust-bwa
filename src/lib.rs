@@ -22,11 +22,6 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-extern crate libc;
-extern crate rust_htslib;
-extern crate anyhow;
-extern crate thiserror;
-
 mod modules;
 pub use modules::{
     BwaAligner,

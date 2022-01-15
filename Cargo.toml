@@ -3,6 +3,7 @@ name = "bwa"
 version = "0.1.1"
 authors = ["Patrick Marks <patrick@10xgenomics.com>"]
 license = "MIT"
+edition = "2018"
 
 [workspace]
 
@@ -11,6 +12,7 @@ libc = "*"
 rust-htslib = { version = ">=0.35.2", default-features = false, features = ["serde_feature"] }
 bwa-sys = { path = "bwa-sys" }
 thiserror = "1"
+anyhow = "1"
 
 [profile.release]
 debug = 1
