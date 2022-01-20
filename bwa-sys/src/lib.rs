@@ -1406,3 +1406,11 @@ extern "C" {
         pes: *const mem_pestat_t,
     );
 }
+extern "C" {
+    pub fn bwa_idx_build(
+        fa: *const ::std::os::raw::c_char,
+        prefix: *const ::std::os::raw::c_char,
+        algo_type: ::std::os::raw::c_int,
+        block_size: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
